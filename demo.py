@@ -59,7 +59,7 @@ def parse_args():
                         nargs=argparse.REMAINDER)
     parser.add_argument('--load_dir', dest='load_dir',
                         help='directory to load models',
-                        default="/data/branchmark")
+                        default="./data/branchmark")
     parser.add_argument('--image_dir', dest='image_dir',
                         help='directory to load images for demo',
                         default="images")
@@ -80,7 +80,7 @@ def parse_args():
                         default=1, type=int)
     parser.add_argument('--checkepoch', dest='checkepoch',
                         help='checkepoch to load network',
-                        default=1, type=int)
+                        default=7, type=int)
     parser.add_argument('--checkpoint', dest='checkpoint',
                         help='checkpoint to load network',
                         default=10021, type=int)
@@ -216,10 +216,11 @@ if __name__ == '__main__':
         gt_boxes = gt_boxes.cuda()
 
     # make variable
-    im_data = Variable(im_data, volatile=True)
-    im_info = Variable(im_info, volatile=True)
-    num_boxes = Variable(num_boxes, volatile=True)
-    gt_boxes = Variable(gt_boxes, volatile=True)
+    with torch.no_grad():
+        im_data = Variable(im_data, volatile=True)
+        im_info = Variable(im_info, volatile=True)
+        num_boxes = Variable(num_boxes, volatile=True)
+        gt_boxes = Variable(gt_boxes, volatile=True)
 
     if args.cuda > 0:
         cfg.CUDA = True
