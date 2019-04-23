@@ -1,3 +1,6 @@
+numpy
+torchvision
+torch
 cython
 cffi
 opencv-python
