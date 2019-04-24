@@ -15,11 +15,11 @@ import pdb
 import time
 
 
-class _RPN(nn.Module):
+class _RPN_attention(nn.Module):
     """ region proposal network """
 
     def __init__(self, din):
-        super(_RPN, self).__init__()
+        super(_RPN_attention, self).__init__()
 
         self.attention_label = [40, 50, 60]  # bag umbrella person
 
