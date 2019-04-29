@@ -11,6 +11,7 @@ import _init_paths
 import os
 import sys
 import numpy as np
+import random
 import argparse
 import pprint
 import pdb
@@ -18,6 +19,8 @@ import time
 import cv2
 import torch
 from torch.autograd import Variable
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 import torch.nn as nn
 import torch.optim as optim
 
@@ -31,7 +34,7 @@ from model.rpn.bbox_transform import clip_boxes
 # from model.nms.nms_wrapper import nms
 from model.roi_layers import nms
 from model.rpn.bbox_transform import bbox_transform_inv
-from model.utils.net_utils import save_net, load_net, vis_detections
+from model.utils.net_utils import save_net, load_net, vis_detections, save_detections_new
 from model.utils.blob import im_list_to_blob
 from model.faster_rcnn.vgg16 import vgg16
 from model.faster_rcnn.resnet import resnet
@@ -47,10 +50,10 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Train a Fast R-CNN network')
     parser.add_argument('--dataset', dest='dataset',
                         help='training dataset',
-                        default='pascal_voc', type=str)
+                        default='coco', type=str)
     parser.add_argument('--cfg', dest='cfg_file',
                         help='optional config file',
-                        default='cfgs/vgg16.yml', type=str)
+                        default='cfgs/res101_ls.yml', type=str)
     parser.add_argument('--net', dest='net',
                         help='vgg16, res50, res101, res152',
                         default='res101', type=str)
@@ -62,7 +65,9 @@ def parse_args():
                         default="./data/branchmark")
     parser.add_argument('--image_dir', dest='image_dir',
                         help='directory to load images for demo',
-                        default="images")
+                        default="./data/monitor")
+    parser.add_argument('--output_dir', default='./output',
+                        help='directory to save the output images')
     parser.add_argument('--cuda', dest='cuda',
                         help='whether use CUDA',
                         action='store_true')
@@ -80,10 +85,10 @@ def parse_args():
                         default=1, type=int)
     parser.add_argument('--checkepoch', dest='checkepoch',
                         help='checkepoch to load network',
-                        default=7, type=int)
+                        default=10, type=int)
     parser.add_argument('--checkpoint', dest='checkpoint',
                         help='checkpoint to load network',
-                        default=10021, type=int)
+                        default=14657, type=int)
     parser.add_argument('--bs', dest='batch_size',
                         help='batch_size',
                         default=1, type=int)
@@ -164,23 +169,47 @@ if __name__ == '__main__':
         raise Exception('There is no input directory for loading network from ' + input_dir)
     load_name = os.path.join(input_dir,
                              'faster_rcnn_{}_{}_{}.pth'.format(args.checksession, args.checkepoch, args.checkpoint))
+    if args.dataset == 'pascal_voc':
+        classes = np.asarray(['__background__',
+                              'aeroplane', 'bicycle', 'bird', 'boat',
+                              'bottle', 'bus', 'car', 'cat', 'chair',
+                              'cow', 'diningtable', 'dog', 'horse',
+                              'motorbike', 'person', 'pottedplant',
+                              'sheep', 'sofa', 'train', 'tvmonitor'])
+        useful_classes = [15]
+    elif args.dataset == 'coco':
+        classes = np.asarray((['__background__', 'person', 'bicycle',
+                               'car', 'motorcycle', 'airplane', 'bus', 'train', 'truck', 'boat', 'traffic light',
+                               'fire hydrant', 'stop sign', 'parking meter', 'bench', 'bird', 'cat', 'dog',
+                               'horse', 'sheep', 'cow', 'elephant', 'bear', 'zebra', 'giraffe', 'backpack', 'umbrella',
+                               'handbag', 'tie', 'suitcase', 'frisbee', 'skis', 'snowboard', 'sports ball', 'kite',
+                               'baseball bat', 'baseball glove', 'skateboard', 'surfboard', 'tennis racket', 'bottle',
+                               'wine glass', 'cup', 'fork', 'knife', 'spoon', 'bowl', 'banana', 'apple', 'sandwich',
+                               'orange', 'broccoli', 'carrot', 'hot dog', 'pizza', 'donut', 'cake', 'chair', 'couch',
+                               'potted plant', 'bed', 'dining table', 'toilet', 'tv', 'laptop', 'mouse', 'remote',
+                               'keyboard', 'cell phone', 'microwave', 'oven', 'toaster', 'sink', 'refrigerator',
+                               'book', 'clock', 'vase', 'scissors', 'teddy bear', 'hair drier', 'toothbrush']))
+        # useful_classes = [1, 25, 26]
+        useful_classes = [i+1 for i in range(len(classes)-1)]
+        args.set_cfgs = ['ANCHOR_SCALES', '[4, 8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]']
+        cfg_from_list(args.set_cfgs)
 
-    pascal_classes = np.asarray(['__background__',
-                                 'aeroplane', 'bicycle', 'bird', 'boat',
-                                 'bottle', 'bus', 'car', 'cat', 'chair',
-                                 'cow', 'diningtable', 'dog', 'horse',
-                                 'motorbike', 'person', 'pottedplant',
-                                 'sheep', 'sofa', 'train', 'tvmonitor'])
+    else:
+        exit(0)
+
+    cmap = plt.get_cmap('tab20b')
+    colors = [cmap(i) for i in np.linspace(0, 1, np.minimum(20, len(useful_classes)))]
+    bbox_color = random.sample(colors, np.minimum(20, len(useful_classes)))
 
     # initilize the network here.
     if args.net == 'vgg16':
-        fasterRCNN = vgg16(pascal_classes, pretrained=False, class_agnostic=args.class_agnostic)
+        fasterRCNN = vgg16(classes, pretrained=False, class_agnostic=args.class_agnostic)
     elif args.net == 'res101':
-        fasterRCNN = resnet(pascal_classes, 101, pretrained=False, class_agnostic=args.class_agnostic)
+        fasterRCNN = resnet(classes, 101, pretrained=False, class_agnostic=args.class_agnostic)
     elif args.net == 'res50':
-        fasterRCNN = resnet(pascal_classes, 50, pretrained=False, class_agnostic=args.class_agnostic)
+        fasterRCNN = resnet(classes, 50, pretrained=False, class_agnostic=args.class_agnostic)
     elif args.net == 'res152':
-        fasterRCNN = resnet(pascal_classes, 152, pretrained=False, class_agnostic=args.class_agnostic)
+        fasterRCNN = resnet(classes, 152, pretrained=False, class_agnostic=args.class_agnostic)
     else:
         print("network is not defined")
         pdb.set_trace()
@@ -217,10 +246,10 @@ if __name__ == '__main__':
 
     # make variable
     with torch.no_grad():
-        im_data = Variable(im_data, volatile=True)
-        im_info = Variable(im_info, volatile=True)
-        num_boxes = Variable(num_boxes, volatile=True)
-        gt_boxes = Variable(gt_boxes, volatile=True)
+        im_data = Variable(im_data)
+        im_info = Variable(im_info)
+        num_boxes = Variable(num_boxes)
+        gt_boxes = Variable(gt_boxes)
 
     if args.cuda > 0:
         cfg.CUDA = True
@@ -314,7 +343,7 @@ if __name__ == '__main__':
                     else:
                         box_deltas = box_deltas.view(-1, 4) * torch.FloatTensor(cfg.TRAIN.BBOX_NORMALIZE_STDS) \
                                      + torch.FloatTensor(cfg.TRAIN.BBOX_NORMALIZE_MEANS)
-                    box_deltas = box_deltas.view(1, -1, 4 * len(pascal_classes))
+                    box_deltas = box_deltas.view(1, -1, 4 * len(classes))
 
             pred_boxes = bbox_transform_inv(boxes, box_deltas, 1)
             pred_boxes = clip_boxes(pred_boxes, im_info.data, 1)
@@ -331,7 +360,10 @@ if __name__ == '__main__':
         misc_tic = time.time()
         if vis:
             im2show = np.copy(im)
-        for j in xrange(1, len(pascal_classes)):
+        # for j in xrange(1, len(classes)):
+
+        detection_res = []  # list of [[bbox(tensor), list], ...]
+        for j, c in zip(useful_classes, bbox_color):
             inds = torch.nonzero(scores[:, j] > thresh).view(-1)
             # if there is det
             if inds.numel() > 0:
@@ -348,9 +380,11 @@ if __name__ == '__main__':
                 # keep = nms(cls_dets, cfg.TEST.NMS, force_cpu=not cfg.USE_GPU_NMS)
                 keep = nms(cls_boxes[order, :], cls_scores[order], cfg.TEST.NMS)
                 cls_dets = cls_dets[keep.view(-1).long()]
-                if vis:
-                    im2show = vis_detections(im2show, pascal_classes[j], cls_dets.cpu().numpy(), 0.5)
+                detection_res.append([cls_dets.cpu().numpy(), classes[j]])
 
+        output_path = os.path.join(args.output_dir, imglist[num_images][:-4] + "_det.jpg")
+        save_detections_new(im2show[:, :, ::-1], detection_res, colors, thresh=0.5, output=output_path)
+        plt.close('all')
         misc_toc = time.time()
         nms_time = misc_toc - misc_tic
 
@@ -359,20 +393,20 @@ if __name__ == '__main__':
                              .format(num_images + 1, len(imglist), detect_time, nms_time))
             sys.stdout.flush()
 
-        if vis and webcam_num == -1:
-            # cv2.imshow('test', im2show)
-            # cv2.waitKey(0)
-            result_path = os.path.join(args.image_dir, imglist[num_images][:-4] + "_det.jpg")
-            cv2.imwrite(result_path, im2show)
-        else:
-            im2showRGB = cv2.cvtColor(im2show, cv2.COLOR_BGR2RGB)
-            cv2.imshow("frame", im2showRGB)
-            total_toc = time.time()
-            total_time = total_toc - total_tic
-            frame_rate = 1 / total_time
-            print('Frame rate:', frame_rate)
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
-    if webcam_num >= 0:
-        cap.release()
-        cv2.destroyAllWindows()
+        # if vis and webcam_num == -1:
+        #     # cv2.imshow('test', im2show)
+        #     # cv2.waitKey(0)
+        #     result_path = os.path.join(args.output_dir, imglist[num_images][:-4] + "_det.jpg")
+        #     cv2.imwrite(result_path, im2show)
+        # else:
+        #     im2showRGB = cv2.cvtColor(im2show, cv2.COLOR_BGR2RGB)
+        #     cv2.imshow("frame", im2showRGB)
+        #     total_toc = time.time()
+        #     total_time = total_toc - total_tic
+        #     frame_rate = 1 / total_time
+        #     print('Frame rate:', frame_rate)
+        #     if cv2.waitKey(1) & 0xFF == ord('q'):
+        #         break
+    # if webcam_num >= 0:
+    #     cap.release()
+    #     cv2.destroyAllWindows()
