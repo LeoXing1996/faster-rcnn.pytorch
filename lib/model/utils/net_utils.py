@@ -63,6 +63,7 @@ def vis_detections(im, class_name, dets, thresh=0.8):
         bbox = tuple(int(np.round(x)) for x in dets[i, :4])
         score = dets[i, -1]
         if score > thresh:
+            #                                        color     width
             cv2.rectangle(im, bbox[0:2], bbox[2:4], (0, 204, 0), 2)
             cv2.putText(im, '%s: %.3f' % (class_name, score), (bbox[0], bbox[1] + 15), cv2.FONT_HERSHEY_PLAIN,
                         1.0, (0, 0, 255), thickness=1)
@@ -71,33 +72,38 @@ def vis_detections(im, class_name, dets, thresh=0.8):
 
 def save_detections_new(im, detection_res, color, thresh=0.8, output='output'):
     """My new visible function"""
-    plt.figure()
-    fig, ax = plt.subplots(1)
-    ax.imshow(im)
+    # todo give a color map to this function
+    # todo give text a additional rectangle and set font color white
+    margin = 2
+    fontFace = cv2.FONT_HERSHEY_PLAIN
+
+    fontScale = 1
+    text_thickness = 1
     for c, res in enumerate(detection_res):
-        dets, class_name = res
+        dets, text = res
+        color_rgba = np.zeros([2, 2, 4])
+        color_rgba[:, :, :] = color[c]
+        color_rgb = (cv2.cvtColor(color_rgba.astype(np.uint8), cv2.COLOR_RGBA2BGR)[0, 0]).astype(np.int).tolist()
         for i in range(dets.shape[0]):
-            bbox = tuple(int(np.round(x)) for x in dets[i, :4])
-            score = dets[i, -1]
-            if score > thresh:
-                x1, y1 = bbox[0:2]
-                x2, y2 = bbox[2:4]
-                box_h = y2 - y1
-                box_w = x2 - x1
-                bbox_ = patches.Rectangle((x1, y1), box_w, box_h, linewidth=2, edgecolor=color[c], facecolor='none')
-                ax.add_patch(bbox_)
-                plt.text(
-                    x1, y1,
-                    s=class_name,
-                    color='white',
-                    verticalalignment="top",
-                    bbox={"color": color[c], "pad": 0},
-                )
-    plt.axis('off')
-    plt.gca().xaxis.set_major_locator(NullLocator())
-    plt.gca().yaxis.set_major_locator(NullLocator())
-    plt.savefig(output, bbox_inches="tight", pad_inches=0.0)
-    plt.close()
+            if dets[i, -1] > thresh:
+                score = str(dets[i, -1])[:5]
+                bbox = tuple(int(np.round(x)) for x in dets[i, :4])
+                x1, y1 = bbox[:2]
+                x2, y2 = bbox[2:]
+                cv2.rectangle(im, (x1, y1), (x2, y2), color_rgb, thickness=margin)
+                # getTextSize(text, fontFace, fontScale, thickness)
+                text_size = cv2.getTextSize(text + ':' + score, fontFace, fontScale, text_thickness)
+                text_box_x1 = x1
+                text_box_y1 = y1 - margin - text_size[0][1] - text_size[1]
+                text_box_x2 = x1 + text_size[0][0] + margin
+                text_box_y2 = y1 - margin
+                cv2.rectangle(im, (text_box_x1, text_box_y1), (text_box_x2, text_box_y2),
+                              color_rgb, thickness=cv2.FILLED)
+                # putText(img, text, bottom-left-corner, fontFace, fontScale, color, thickness)
+                cv2.putText(im, text + ':' + score,
+                            (x1 + margin, y1 - (text_size[0][1] - text_size[1])),
+                            fontFace, fontScale, (255, 255, 255), text_thickness)
+    cv2.imwrite(output, im)
 
 
 def adjust_learning_rate(optimizer, decay=0.1):

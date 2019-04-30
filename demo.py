@@ -189,8 +189,8 @@ if __name__ == '__main__':
                                'potted plant', 'bed', 'dining table', 'toilet', 'tv', 'laptop', 'mouse', 'remote',
                                'keyboard', 'cell phone', 'microwave', 'oven', 'toaster', 'sink', 'refrigerator',
                                'book', 'clock', 'vase', 'scissors', 'teddy bear', 'hair drier', 'toothbrush']))
-        # useful_classes = [1, 25, 26]
-        useful_classes = [i+1 for i in range(len(classes)-1)]
+        useful_classes = [1, 25, 26]
+        # useful_classes = [i+1 for i in range(len(classes)-1)]
         args.set_cfgs = ['ANCHOR_SCALES', '[4, 8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]']
         cfg_from_list(args.set_cfgs)
 
@@ -198,8 +198,12 @@ if __name__ == '__main__':
         exit(0)
 
     cmap = plt.get_cmap('tab20b')
-    colors = [cmap(i) for i in np.linspace(0, 1, np.minimum(20, len(useful_classes)))]
-    bbox_color = random.sample(colors, np.minimum(20, len(useful_classes)))
+    color_rgba = [cmap(i) for i in np.linspace(0, 1, np.minimum(20, len(useful_classes)))]
+    bbox_color = random.sample(color_rgba, np.minimum(20, len(useful_classes)))
+    bbox_color = np.array(bbox_color)
+    bbox_color[:, :3] = bbox_color[:, :3] * 255
+    bbox_color = bbox_color.astype(np.uint8)
+    # color_rgb = (cv2.cvtColor(color_rgba.astype(np.uint8), cv2.COLOR_RGBA2BGR)[0, 0]).astype(np.int).tolist()
 
     # initilize the network here.
     if args.net == 'vgg16':
@@ -363,7 +367,7 @@ if __name__ == '__main__':
         # for j in xrange(1, len(classes)):
 
         detection_res = []  # list of [[bbox(tensor), list], ...]
-        for j, c in zip(useful_classes, bbox_color):
+        for j in useful_classes:
             inds = torch.nonzero(scores[:, j] > thresh).view(-1)
             # if there is det
             if inds.numel() > 0:
@@ -383,7 +387,7 @@ if __name__ == '__main__':
                 detection_res.append([cls_dets.cpu().numpy(), classes[j]])
 
         output_path = os.path.join(args.output_dir, imglist[num_images][:-4] + "_det.jpg")
-        save_detections_new(im2show[:, :, ::-1], detection_res, colors, thresh=0.5, output=output_path)
+        save_detections_new(im2show, detection_res, bbox_color, thresh=0.5, output=output_path)
         plt.close('all')
         misc_toc = time.time()
         nms_time = misc_toc - misc_tic
