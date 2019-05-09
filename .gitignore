@@ -202,4 +202,7 @@ caffe2.egg-info
 lib/model/utils/bbox.c
 lib/pycocotools/_mask.c
 
+# debug folder
+debug/
+# output folder
 output/

@@ -222,8 +222,8 @@ if __name__ == '__main__':
 
     fasterRCNN.eval()
     empty_array = np.transpose(np.array([[], [], [], [], []]), (1, 0))
-    for i in range(num_images):
-
+    # for i in range(num_images):
+    for i in range(100):
         data = next(data_iter)
         im_data.data.resize_(data[0].size()).copy_(data[0])
         im_info.data.resize_(data[1].size()).copy_(data[1])
