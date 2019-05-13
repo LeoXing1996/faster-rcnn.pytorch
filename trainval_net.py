@@ -32,6 +32,7 @@ from model.utils.net_utils import weights_normal_init, save_net, load_net, \
 
 from model.faster_rcnn.vgg16 import vgg16
 from model.faster_rcnn.resnet import resnet
+from model.faster_rcnn.resnet import resnet_rel
 
 
 def parse_args():
@@ -116,6 +117,9 @@ def parse_args():
     parser.add_argument('--use_tfb', dest='use_tfboard',
                         help='whether use tensorboard',
                         action='store_true')
+
+    # relation layer
+    parser.add_argument('--use_rel', action='store_true')
 
     args = parser.parse_args()
     return args
@@ -239,7 +243,10 @@ if __name__ == '__main__':
     if args.net == 'vgg16':
         fasterRCNN = vgg16(imdb.classes, pretrained=True, class_agnostic=args.class_agnostic)
     elif args.net == 'res101':
-        fasterRCNN = resnet(imdb.classes, 101, pretrained=True, class_agnostic=args.class_agnostic)
+        if args.use_rel:
+            fasterRCNN = resnet_rel(imdb.classes, 101, pretrained=True, class_agnostic=args.class_agnostic)
+        else:
+            fasterRCNN = resnet(imdb.classes, 101, pretrained=True, class_agnostic=args.class_agnostic)
     elif args.net == 'res50':
         fasterRCNN = resnet(imdb.classes, 50, pretrained=True, class_agnostic=args.class_agnostic)
     elif args.net == 'res152':
@@ -272,15 +279,17 @@ if __name__ == '__main__':
         optimizer = torch.optim.SGD(params, momentum=cfg.TRAIN.MOMENTUM)
 
     if args.resume:
-        load_name = os.path.join(output_dir,
-                                 'faster_rcnn_{}_{}_{}.pth'.format(args.checksession, args.checkepoch, args.checkpoint))
+        load_name = './data/benchmark/res101/pascal_voc/faster_rcnn_1_7_10021.pth'
+        # load_name = os.path.join(output_dir,
+        #                          'faster_rcnn_{}_{}_{}.pth'.format(args.checksession, args.checkepoch, args.checkpoint))
         print("loading checkpoint %s" % (load_name))
         checkpoint = torch.load(load_name)
         args.session = checkpoint['session']
         args.start_epoch = checkpoint['epoch']
-        fasterRCNN.load_state_dict(checkpoint['model'])
-        optimizer.load_state_dict(checkpoint['optimizer'])
-        lr = optimizer.param_groups[0]['lr']
+        # fasterRCNN.load_state_dict(checkpoint['model'])
+        fasterRCNN.load_ckpt(checkpoint['model'])
+        # optimizer.load_state_dict(checkpoint['optimizer'])
+        # lr = optimizer.param_groups[0]['lr']
         if 'pooling_mode' in checkpoint.keys():
             cfg.POOLING_MODE = checkpoint['pooling_mode']
         print("loaded checkpoint %s" % (load_name))

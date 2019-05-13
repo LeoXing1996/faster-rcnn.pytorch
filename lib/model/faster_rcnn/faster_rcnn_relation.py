@@ -15,16 +15,17 @@ from model.roi_layers import ROIAlign, ROIPool
 # from model.roi_align.modules.roi_align import RoIAlignAvg
 
 from model.rpn.proposal_target_layer_cascade import _ProposalTargetLayer
+from model.relation.relation_block import relation_layer
 import time
 import pdb
 from model.utils.net_utils import _smooth_l1_loss, _crop_pool_layer, _affine_grid_gen, _affine_theta
 
 
-class _fasterRCNN(nn.Module):
+class _fasterRCNN_rel(nn.Module):
     """ faster RCNN """
 
     def __init__(self, classes, class_agnostic):
-        super(_fasterRCNN, self).__init__()
+        super(_fasterRCNN_rel, self).__init__()
         self.classes = classes
         self.n_classes = len(classes)
         self.class_agnostic = class_agnostic
@@ -41,6 +42,10 @@ class _fasterRCNN(nn.Module):
 
         self.RCNN_roi_pool = ROIPool((cfg.POOLING_SIZE, cfg.POOLING_SIZE), 1.0 / 16.0)
         self.RCNN_roi_align = ROIAlign((cfg.POOLING_SIZE, cfg.POOLING_SIZE), 1.0 / 16.0, 0)
+        self.relation_layer = relation_layer(len(classes), 1024)
+
+        self.skip_layers = ['RCNN_cls_score.weight', 'RCNN_cls_score.bias',
+                            'RCNN_bbox_pred.weight', 'RCNN_bbox_pred.bias']
 
     def forward(self, im_data, im_info, gt_boxes, num_boxes):
         batch_size = im_data.size(0)
@@ -79,6 +84,9 @@ class _fasterRCNN(nn.Module):
             pooled_feat = self.RCNN_roi_align(base_feat, rois.view(-1, 5))
         elif cfg.POOLING_MODE == 'pool':
             pooled_feat = self.RCNN_roi_pool(base_feat, rois.view(-1, 5))
+
+        # relation layer
+        pooled_feat = self.relation_layer(rois[0][:, 1:], pooled_feat)
 
         # feed pooled features to top model
         pooled_feat = self._head_to_tail(pooled_feat)
@@ -134,5 +142,7 @@ class _fasterRCNN(nn.Module):
         self._init_weights()
 
     def load_ckpt(self, ckpt):
-        self.load_state_dict(ckpt)
-        pass
+        state_dict = self.state_dict()
+        pretrianed_model = {k: v for k, v in ckpt.items() if k in state_dict.keys() and k not in self.skip_layers}
+        state_dict.update(pretrianed_model)
+        self.load_state_dict(state_dict)
