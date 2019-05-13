@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
-# import torch.nn.functional as F
+
+from model.utils.config import cfg
 
 
 class relation_layer(nn.Module):
@@ -12,6 +13,7 @@ class relation_layer(nn.Module):
         self.input_channels = input_channels
         self.class_conv = nn.Sequential(*[nn.Conv2d(input_channels, self.class_nums, 3, 1, 1),
                                           nn.Conv2d(self.class_nums, input_channels, 3, 1, 1)])
+        self.bz = cfg.TRAIN.BATCH_SIZE
 
     @staticmethod
     def get_dist(proposals):
@@ -65,9 +67,9 @@ class relation_layer(nn.Module):
 
         return bbox_nea_id, bbox_far_id, bbox_nea_dis, bbox_far_dis
 
-    def forward(self, proposals, pooled_feat):
-        # input proposals should be shape as [300, 4]
-        # this should receive `proposal[0][:, 1:]` if used directly in faster-rcnn
+    def relation_single_batch(self, proposals, pooled_feat):
+        # proposals [bz, 4]
+        # pooled_feat [bz, channels, fm_size, fm_size]
         input_channels = pooled_feat.shape[1]
         fm_size = pooled_feat.shape[-1]
         relation_nums = self.nea_nums + self.far_nums
@@ -90,11 +92,15 @@ class relation_layer(nn.Module):
                                                   pooled_cls_act[tar_bbox_id[i]].view(relation_nums, -1)
                                                   ).view(1, input_channels, fm_size, fm_size)
                                      for i in range(tar_bbox_id.shape[0])], dim=0)
+        return pooled_feat_rel
 
-        #         this method cost more time but mem cost 30 mb less than method 1 ---> use method 1
-        #         pooled_feat_relat_1 = tar_bbox_weight.view(300, relation_nums, 1, 1, 1) *
-        #                               torch.cat([pooled_cls_act[tar_bbox_id[i]].unsqueeze(0) for i in range(300)])
-        #         pooled_feat_relat_1 = torch.sum(pooled_feat_relat_1, dim=1)
+    def forward(self, proposals, pooled_feat):
+        # proposals [n, bz, 4]
+        # pooled_feat [n*bz, channels, fm_size, fm_size]
+        # here `n` is the batch size of image and `bz`id number of rois
+        N = proposals.shape[0]
+        bz = self.bz
+        pooled_feat_rel = torch.cat([self.relation_single_batch(proposals[n], pooled_feat[bz*n: bz*(n+1)])
+                                     for n in range(N)])
 
-        # 3. return re-weight feat
-        return pooled_feat_rel + pooled_feat
+        return pooled_feat + pooled_feat_rel

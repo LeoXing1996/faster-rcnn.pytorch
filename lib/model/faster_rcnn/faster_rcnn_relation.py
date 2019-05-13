@@ -86,7 +86,7 @@ class _fasterRCNN_rel(nn.Module):
             pooled_feat = self.RCNN_roi_pool(base_feat, rois.view(-1, 5))
 
         # relation layer
-        pooled_feat = self.relation_layer(rois[0][:, 1:], pooled_feat)
+        pooled_feat = self.relation_layer(rois[:, :, 1:], pooled_feat)
 
         # feed pooled features to top model
         pooled_feat = self._head_to_tail(pooled_feat)
