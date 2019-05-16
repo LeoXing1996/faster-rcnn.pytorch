@@ -67,7 +67,7 @@ class relation_layer(nn.Module):
 
         return bbox_nea_id, bbox_far_id, bbox_nea_dis, bbox_far_dis
 
-    def relation_single_batch(self, proposals, pooled_feat):
+    def relation_single_batch(self, proposals, pooled_feat, times=2):
         # proposals [bz, 4]
         # pooled_feat [bz, channels, fm_size, fm_size]
         input_channels = pooled_feat.shape[1]
@@ -81,26 +81,32 @@ class relation_layer(nn.Module):
         tar_bbox_weight_dist = torch.cat((bbox_nea_dis, bbox_far_dis), dim=1)
         tar_bbox_weight_dist = torch.softmax(tar_bbox_weight_dist / 100, dim=1)
 
-        # 1. adapt all feature map to the class_conv
-        pooled_cls_act = self.class_conv(pooled_feat)
+        for _ in range(times):
+            # 1. adapt all feature map to the class_conv
+            pooled_cls_act = self.class_conv(pooled_feat)
 
-        # 2. calculate relation weights
-        # tar_bbox_weight_dist[i]:           [relation_nums, ]
-        # pooled_feat_class[tar_bbox_id[i]]: [relation_nums, input_channels, fm_size, fm_size]
+            # 2. calculate relation weights
+            # tar_bbox_weight_dist[i]:           [relation_nums, ]
+            # pooled_feat_class[tar_bbox_id[i]]: [relation_nums, input_channels, fm_size, fm_size]
 
-        pooled_feat_rel = torch.cat([torch.matmul(tar_bbox_weight_dist[i].view(1, -1),
-                                                  pooled_cls_act[tar_bbox_id[i]].view(relation_nums, -1)
-                                                  ).view(1, input_channels, fm_size, fm_size)
-                                     for i in range(tar_bbox_id.shape[0])], dim=0)
-        return pooled_feat_rel
+            pooled_feat_rel = torch.cat([torch.matmul(tar_bbox_weight_dist[i].view(1, -1),
+                                                      pooled_cls_act[tar_bbox_id[i]].view(relation_nums, -1)
+                                                      ).view(1, input_channels, fm_size, fm_size)
+                                         for i in range(tar_bbox_id.shape[0])], dim=0)
 
-    def forward(self, proposals, pooled_feat):
+            pooled_feat = pooled_feat + pooled_feat_rel
+
+        return pooled_feat
+
+    def forward(self, proposals, pooled_feat, times=2):
         # proposals [n, bz, 4]
         # pooled_feat [n*bz, channels, fm_size, fm_size]
+        # times: broadcast nums
         # here `n` is the batch size of image and `bz`id number of rois
         N = proposals.shape[0]
         bz = self.bz
-        pooled_feat_rel = torch.cat([self.relation_single_batch(proposals[n], pooled_feat[bz*n: bz*(n+1)])
+
+        pooled_feat = torch.cat([self.relation_single_batch(proposals[n], pooled_feat[bz*n: bz*(n+1)], times)
                                      for n in range(N)])
 
-        return pooled_feat + pooled_feat_rel
+        return pooled_feat

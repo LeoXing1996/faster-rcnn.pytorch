@@ -30,8 +30,11 @@ class _fasterRCNN_rel(nn.Module):
         self.n_classes = len(classes)
         self.class_agnostic = class_agnostic
         # loss
-        self.RCNN_loss_cls = 0
-        self.RCNN_loss_bbox = 0
+        # self.RCNN_loss_cls = 0
+        # self.RCNN_loss_bbox = 0
+        # fix for mGPUs
+        self.RCNN_loss_cls = torch.tensor([0])
+        self.RCNN_loss_bbox = torch.tensor([0])
 
         # define rpn
         self.RCNN_rpn = _RPN(self.dout_base_model)

@@ -31,6 +31,7 @@ from model.rpn.bbox_transform import bbox_transform_inv
 from model.utils.net_utils import save_net, load_net, vis_detections
 from model.faster_rcnn.vgg16 import vgg16
 from model.faster_rcnn.resnet import resnet
+from model.faster_rcnn.resnet import resnet_rel
 
 import pdb
 
@@ -84,6 +85,7 @@ def parse_args():
     parser.add_argument('--vis', dest='vis',
                         help='visualization mode',
                         action='store_true')
+    parser.add_argument('--use_rel', action='store_true')
     args = parser.parse_args()
     return args
 
@@ -136,6 +138,7 @@ if __name__ == '__main__':
 
     cfg.TRAIN.USE_FLIPPED = False
     imdb, roidb, ratio_list, ratio_index = combined_roidb(args.imdbval_name, False)
+    # imdb, roidb, ratio_list, ratio_index = combined_roidb(args.imdb_name, False)  # test on training set
     imdb.competition_mode(on=True)
 
     print('{:d} roidb entries'.format(len(roidb)))
@@ -150,7 +153,10 @@ if __name__ == '__main__':
     if args.net == 'vgg16':
         fasterRCNN = vgg16(imdb.classes, pretrained=False, class_agnostic=args.class_agnostic)
     elif args.net == 'res101':
-        fasterRCNN = resnet(imdb.classes, 101, pretrained=False, class_agnostic=args.class_agnostic)
+        if args.use_rel:
+            fasterRCNN = resnet_rel(imdb.classes, 101, pretrained=False, class_agnostic=args.class_agnostic)
+        else:
+            fasterRCNN = resnet(imdb.classes, 101, pretrained=False, class_agnostic=args.class_agnostic)
     elif args.net == 'res50':
         fasterRCNN = resnet(imdb.classes, 50, pretrained=False, class_agnostic=args.class_agnostic)
     elif args.net == 'res152':
@@ -163,8 +169,8 @@ if __name__ == '__main__':
 
     print("load checkpoint %s" % (load_name))
     checkpoint = torch.load(load_name)
-    # fasterRCNN.load_state_dict(checkpoint['model'])
-    fasterRCNN.load_ckpt(checkpoint['model'])
+    fasterRCNN.load_state_dict(checkpoint['model'])
+    # fasterRCNN.load_ckpt(checkpoint['model'])
     if 'pooling_mode' in checkpoint.keys():
         cfg.POOLING_MODE = checkpoint['pooling_mode']
 
@@ -223,8 +229,8 @@ if __name__ == '__main__':
 
     fasterRCNN.eval()
     empty_array = np.transpose(np.array([[], [], [], [], []]), (1, 0))
-    # for i in range(num_images):
-    for i in range(100):
+    for i in range(num_images):
+    # for i in range(100):
         data = next(data_iter)
         im_data.data.resize_(data[0].size()).copy_(data[0])
         im_info.data.resize_(data[1].size()).copy_(data[1])

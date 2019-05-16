@@ -206,3 +206,6 @@ lib/pycocotools/_mask.c
 debug/
 # output folder
 output/
+logs/
+outputs/
+models/

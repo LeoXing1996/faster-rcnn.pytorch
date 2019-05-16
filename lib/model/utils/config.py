@@ -193,7 +193,8 @@ __C.TEST.RPN_NMS_THRESH = 0.7
 __C.TEST.RPN_PRE_NMS_TOP_N = 6000
 
 ## Number of top scoring boxes to keep after applying NMS to RPN proposals
-__C.TEST.RPN_POST_NMS_TOP_N = 300
+# __C.TEST.RPN_POST_NMS_TOP_N = 300
+__C.TEST.RPN_POST_NMS_TOP_N = 128
 
 # Proposal height and width both need to be greater than RPN_MIN_SIZE (at orig image scale)
 __C.TEST.RPN_MIN_SIZE = 16
@@ -269,7 +270,7 @@ __C.ROOT_DIR = osp.abspath(osp.join(osp.dirname(__file__), '..', '..', '..'))
 __C.DATA_DIR = osp.abspath(osp.join(__C.ROOT_DIR, 'data'))
 
 # Name (or path to) the matlab executable
-__C.MATLAB = 'matlab'
+__C.MATLAB = '/space1/software/matlab/bin/matlab'
 
 # Place outputs under an experiments directory
 __C.EXP_DIR = 'default'
