@@ -329,6 +329,7 @@ class pascal_voc(imdb):
         print('Recompute with `./tools/reval.py --matlab ...` for your paper.')
         print('-- Thanks, The Management')
         print('--------------------------------------------------------------')
+        return aps, self._classes
 
     def _do_matlab_eval(self, output_dir='output'):
         print('-----------------------------------------------------')
@@ -345,9 +346,9 @@ class pascal_voc(imdb):
         print('Running:\n{}'.format(cmd))
         status = subprocess.call(cmd, shell=True)
 
-    def evaluate_detections(self, all_boxes, output_dir):
+    def evaluate_detections(self, all_boxes, output_dir, save_path):
         self._write_voc_results_file(all_boxes)
-        self._do_python_eval(output_dir)
+        aps, class_ = self._do_python_eval(output_dir)
         if self.config['matlab_eval']:
             self._do_matlab_eval(output_dir)
         if self.config['cleanup']:
@@ -356,6 +357,13 @@ class pascal_voc(imdb):
                     continue
                 filename = self._get_voc_results_file_template().format(cls)
                 os.remove(filename)
+
+        with open(save_path, 'w') as file:
+            for ap, cls in zip(aps, class_[1:]):
+                file.write('{:s} {:.3f}\n'.format(cls, ap))
+            file.write('mAP {:.3f}'.format(np.mean(aps)))
+
+        # return aps, class_
 
     def competition_mode(self, on):
         if on:

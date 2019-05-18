@@ -209,3 +209,4 @@ output/
 logs/
 outputs/
 models/
+*.ipynb

@@ -138,7 +138,6 @@ if __name__ == '__main__':
 
     cfg.TRAIN.USE_FLIPPED = False
     imdb, roidb, ratio_list, ratio_index = combined_roidb(args.imdbval_name, False)
-    # imdb, roidb, ratio_list, ratio_index = combined_roidb(args.imdb_name, False)  # test on training set
     imdb.competition_mode(on=True)
 
     print('{:d} roidb entries'.format(len(roidb)))
@@ -216,6 +215,13 @@ if __name__ == '__main__':
                  for _ in xrange(imdb.num_classes)]
 
     output_dir = get_output_dir(imdb, save_name)
+
+    mAP_name = load_name.split('/')[-1].split('.')[0] + '.txt'
+    mAP_dir = os.path.join('output', args.net, args.imdbval_name, 'mAP')
+    if not os.path.isdir(mAP_dir):
+        os.makedirs(mAP_dir)
+    mAP_path = os.path.join(mAP_dir, mAP_name)
+
     dataset = roibatchLoader(roidb, ratio_list, ratio_index, 1,
                              imdb.num_classes, training=False, normalize=False)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=1,
@@ -229,8 +235,8 @@ if __name__ == '__main__':
 
     fasterRCNN.eval()
     empty_array = np.transpose(np.array([[], [], [], [], []]), (1, 0))
+
     for i in range(num_images):
-    # for i in range(100):
         data = next(data_iter)
         im_data.data.resize_(data[0].size()).copy_(data[0])
         im_info.data.resize_(data[1].size()).copy_(data[1])
@@ -325,7 +331,12 @@ if __name__ == '__main__':
         pickle.dump(all_boxes, f, pickle.HIGHEST_PROTOCOL)
 
     print('Evaluating detections')
-    imdb.evaluate_detections(all_boxes, output_dir)
+    imdb.evaluate_detections(all_boxes, output_dir, mAP_path)
+    # res_path = os.path.join('./output', load_name.split('.')[0] + '.txt')
+    #
+    # with open(res_path, 'w') as file:
+    #     for ap, cls in zip(aps, class_):
+    #         file.write('{:s} {:.3f}\n'.format(cls, ap))
 
     end = time.time()
     print("test time: %0.4fs" % (end - start))
