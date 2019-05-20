@@ -31,7 +31,7 @@ from model.rpn.bbox_transform import bbox_transform_inv
 from model.utils.net_utils import save_net, load_net, vis_detections
 from model.faster_rcnn.vgg16 import vgg16
 from model.faster_rcnn.resnet import resnet
-from model.faster_rcnn.resnet import resnet_rel
+from model.faster_rcnn.resnet import resnet_rel, resnet_rel_cls
 
 import pdb
 
@@ -153,7 +153,8 @@ if __name__ == '__main__':
         fasterRCNN = vgg16(imdb.classes, pretrained=False, class_agnostic=args.class_agnostic)
     elif args.net == 'res101':
         if args.use_rel:
-            fasterRCNN = resnet_rel(imdb.classes, 101, pretrained=False, class_agnostic=args.class_agnostic)
+            fasterRCNN = resnet_rel_cls(imdb.classes, 101, pretrained=False, class_agnostic=args.class_agnostic)
+            # fasterRCNN = resnet_rel(imdb.classes, 101, pretrained=False, class_agnostic=args.class_agnostic)
         else:
             fasterRCNN = resnet(imdb.classes, 101, pretrained=False, class_agnostic=args.class_agnostic)
     elif args.net == 'res50':
@@ -234,6 +235,7 @@ if __name__ == '__main__':
     det_file = os.path.join(output_dir, 'detections.pkl')
 
     fasterRCNN.eval()
+    fasterRCNN.img_bz = cfg.TEST.RPN_POST_NMS_TOP_N
     empty_array = np.transpose(np.array([[], [], [], [], []]), (1, 0))
 
     for i in range(num_images):
