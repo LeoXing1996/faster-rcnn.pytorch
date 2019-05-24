@@ -382,6 +382,7 @@ if __name__ == '__main__':
 
                 loss_temp = 0
                 start = time.time()
+                torch.cuda.empty_cache()
 
         save_name = os.path.join(output_dir, 'faster_rcnn_{}_{}_{}.pth'.format(args.session, epoch, step))
         save_checkpoint({

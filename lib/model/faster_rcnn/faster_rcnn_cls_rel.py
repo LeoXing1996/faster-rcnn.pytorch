@@ -60,7 +60,7 @@ class _fasterRCNN_rel_cls(nn.Module):
         self.area_feat_layer = nn.Linear(2 * self.n_classes, 1).cuda()
         self.rel_weight_layer = nn.Linear(3, 1).cuda()
 
-    def forward(self, im_data, im_info, gt_boxes, num_boxes, times=2):
+    def forward(self, im_data, im_info, gt_boxes, num_boxes, times=1):
         batch_size = im_data.size(0)
 
         im_info = im_info.data
@@ -109,10 +109,14 @@ class _fasterRCNN_rel_cls(nn.Module):
 
         for _ in range(times):
 
-            # 1. get pooled feat and cls, reg result
+            # 1. get pooled feat and cls, reg result and acc loss
             avg_pooled_feat = self._head_to_tail(pooled_feat)
             cls_score = self.RCNN_cls_score(avg_pooled_feat)
             bbox_pred = self.RCNN_bbox_pred(avg_pooled_feat)
+            RCNN_loss_bbox_tmp, RCNN_loss_cls_tmp = self.add_loss(bbox_pred, cls_score, rois_label,
+                                                                  rois_target, rois_inside_ws, rois_outside_ws)
+            RCNN_loss_bbox_mean = RCNN_loss_bbox_mean + RCNN_loss_bbox_tmp.data
+            RCNN_loss_cls_mean = RCNN_loss_cls_mean + RCNN_loss_bbox_tmp.data
 
             # 2. get cls info
             cls_prob = torch.softmax(cls_score, dim=1)
@@ -128,56 +132,40 @@ class _fasterRCNN_rel_cls(nn.Module):
             pooled_feat = self.fresh_pooled_feat(cls_info, area_info, dist_info, id_info, pooled_feat)
             pooled_feat = pooled_feat.view(-1, 1024, 7, 7)
 
-            # 5. calculate the loss
-            if self.training and not self.class_agnostic:
-                # select the corresponding columns according to roi labels
-                bbox_pred_view = bbox_pred.view(bbox_pred.size(0), int(bbox_pred.size(1) / 4), 4)
-                bbox_pred_select = torch.gather(bbox_pred_view, 1,
-                                                rois_label.view(rois_label.size(0), 1, 1).expand(rois_label.size(0), 1,
-                                                                                                 4))
-                bbox_pred = bbox_pred_select.squeeze(1)
-            if self.training:
-                # classification loss
-                RCNN_loss_cls_tmp = F.cross_entropy(cls_score, rois_label)
-                # bounding box regression L1 loss
-                RCNN_loss_bbox_tmp = _smooth_l1_loss(bbox_pred, rois_target, rois_inside_ws, rois_outside_ws)
-            else:
-                RCNN_loss_cls_tmp = 0
-                RCNN_loss_bbox_tmp = 0
-            RCNN_loss_cls_mean = RCNN_loss_cls_tmp + RCNN_loss_cls_mean
-            RCNN_loss_bbox_mean = RCNN_loss_bbox_tmp + RCNN_loss_cls_mean
+        # 5. calculate the final loss
+        avg_pooled_feat = self._head_to_tail(pooled_feat)
+        cls_score = self.RCNN_cls_score(avg_pooled_feat)
+        bbox_pred = self.RCNN_bbox_pred(avg_pooled_feat)
+        RCNN_loss_bbox_tmp, RCNN_loss_cls_tmp = self.add_loss(bbox_pred, cls_score, rois_label,
+                                                              rois_target, rois_inside_ws, rois_outside_ws)
+        RCNN_loss_cls_mean = RCNN_loss_cls_tmp.data + RCNN_loss_cls_mean
+        RCNN_loss_bbox_mean = RCNN_loss_bbox_tmp.data + RCNN_loss_cls_mean
 
-        # # feed pooled features to top model
-        # pooled_feat = self._head_to_tail(pooled_feat)
-        #
-        # # compute bbox offset
-        # bbox_pred = self.RCNN_bbox_pred(pooled_feat)
-        # if self.training and not self.class_agnostic:
-        #     # select the corresponding columns according to roi labels
-        #     bbox_pred_view = bbox_pred.view(bbox_pred.size(0), int(bbox_pred.size(1) / 4), 4)
-        #     bbox_pred_select = torch.gather(bbox_pred_view, 1,
-        #                                     rois_label.view(rois_label.size(0), 1, 1).expand(rois_label.size(0), 1, 4))
-        #     bbox_pred = bbox_pred_select.squeeze(1)
-        #
-        # # compute object classification probability
-        # cls_score = self.RCNN_cls_score(pooled_feat)
-        # cls_prob = F.softmax(cls_score, 1)
-        #
-        # RCNN_loss_cls = 0
-        # RCNN_loss_bbox = 0
-        #
-        # if self.training:
-        #     # classification loss
-        #     RCNN_loss_cls = F.cross_entropy(cls_score, rois_label)
-        #
-        #     # bounding box regression L1 loss
-        #     RCNN_loss_bbox = _smooth_l1_loss(bbox_pred, rois_target, rois_inside_ws, rois_outside_ws)
-        RCNN_loss_cls = RCNN_loss_cls_mean / times
-        RCNN_loss_bbox = RCNN_loss_bbox_mean / times
+        RCNN_loss_cls = RCNN_loss_cls_mean / (times+1)
+        RCNN_loss_bbox = RCNN_loss_bbox_mean / (times+1)
         cls_prob = cls_prob.view(batch_size, rois.size(1), -1)
         bbox_pred = bbox_pred.view(batch_size, rois.size(1), -1)
 
         return rois, cls_prob, bbox_pred, rpn_loss_cls, rpn_loss_bbox, RCNN_loss_cls, RCNN_loss_bbox, rois_label
+
+    def add_loss(self, bbox_pred, cls_score, rois_label, rois_target, rois_inside_ws, rois_outside_ws):
+        # 5. calculate the loss
+        if self.training and not self.class_agnostic:
+            # select the corresponding columns according to roi labels
+            bbox_pred_view = bbox_pred.view(bbox_pred.size(0), int(bbox_pred.size(1) / 4), 4)
+            bbox_pred_select = torch.gather(bbox_pred_view, 1,
+                                            rois_label.view(rois_label.size(0), 1, 1).expand(rois_label.size(0), 1,
+                                                                                             4))
+            bbox_pred = bbox_pred_select.squeeze(1)
+        if self.training:
+            # classification loss
+            RCNN_loss_cls_tmp = F.cross_entropy(cls_score, rois_label)
+            # bounding box regression L1 loss
+            RCNN_loss_bbox_tmp = _smooth_l1_loss(bbox_pred, rois_target, rois_inside_ws, rois_outside_ws)
+        else:
+            RCNN_loss_cls_tmp = 0
+            RCNN_loss_bbox_tmp = 0
+        return RCNN_loss_bbox_tmp, RCNN_loss_cls_tmp
 
     def _init_weights(self):
         def normal_init(m, mean, stddev, truncated=False):
@@ -302,11 +290,14 @@ class _fasterRCNN_rel_cls(nn.Module):
             dist_info_sin = dist_info[i].view(6, 1)
 
             rel_weight = self.get_rel_weight(cls_info_sin, area_info_sin, dist_info_sin)
-            rel_feat = pooled_feat[id_info[i]] * torch.softmax(rel_weight / 100, 0).view(6, 1, 1, 1)
+            # rel_feat = pooled_feat[id_info[i]] * torch.softmax(rel_weight / 100, 0).view(6, 1, 1, 1)
+            rel_feat = pooled_feat[id_info[i]] * torch.softmax(rel_weight, 0).view(6, 1, 1, 1)
             rel_feat = rel_feat.sum(dim=0, keepdim=True)
             # rel_feats[i] = rel_feat
             rel_feats.append(rel_feat)
-        return torch.cat(rel_feats, dim=0)
+        rel_feats = torch.cat(rel_feats, dim=0)
+        return rel_feats
+        # return torch.cat(rel_feats, dim=0)
 
     def fresh_pooled_feat(self, cls_info, area_info, dist_info, id_info, pooled_feat):
         # cls_info ---> [cfg.TRAIN.IMS_PER_BATCH, cfg.TRAIN.BATCH_SIZE, len(cls_num)]
@@ -325,5 +316,7 @@ class _fasterRCNN_rel_cls(nn.Module):
             rel_feats_batch.append(rel_feats.unsqueeze(0))
             # pooled_feat[b] = rel_feats + pooled_feat[b]
         rel_feats_batch = torch.cat(rel_feats_batch, dim=0)
-
-        return pooled_feat + rel_feats_batch
+        # return pooled_feat + rel_feats_batch
+        pooled_feat = 0.5 * pooled_feat + rel_feats_batch
+        # return 0.5 * pooled_feat + rel_feats_batch  # add normalization
+        return pooled_feat
