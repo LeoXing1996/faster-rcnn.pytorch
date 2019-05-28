@@ -125,6 +125,21 @@ if __name__ == '__main__':
         args.imdb_name = "vg_150-50-50_minitrain"
         args.imdbval_name = "vg_150-50-50_minival"
         args.set_cfgs = ['ANCHOR_SCALES', '[4, 8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]']
+    elif args.dataset == 'monitor_pre_1':
+        args.imdb_name = "monitor_Ori_trainval+monitor_Pre1_trainval"
+        args.imdbval_name = "monitor_ori_test"
+        args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '20']
+        args.disp_interval = 10
+    elif args.dataset == 'monitor_pre_2':
+        args.imdb_name = "monitor_Ori_trainval+monitor_Pre2_trainval"
+        args.imdbval_name = "monitor_ori_test"
+        args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '20']
+        args.disp_interval = 10
+    elif args.dataset == 'monitor_pre':
+        args.imdb_name = "monitor_Ori_trainval+monitor_Pre1_trainval+monitor_Pre2_trainval"
+        args.imdbval_name = "monitor_ori_test"
+        args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '20']
+        args.disp_interval = 10
 
     args.cfg_file = "cfgs/{}_ls.yml".format(args.net) if args.large_scale else "cfgs/{}.yml".format(args.net)
 
