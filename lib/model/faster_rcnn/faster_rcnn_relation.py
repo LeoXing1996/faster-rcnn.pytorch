@@ -146,6 +146,7 @@ class _fasterRCNN_rel(nn.Module):
 
     def load_ckpt(self, ckpt):
         state_dict = self.state_dict()
-        pretrianed_model = {k: v for k, v in ckpt.items() if k in state_dict.keys() and k not in self.skip_layers}
-        state_dict.update(pretrianed_model)
-        self.load_state_dict(state_dict)
+        # pretrianed_model = {k: v for k, v in ckpt.items() if k in state_dict.keys() and k not in self.skip_layers}
+        # state_dict.update(pretrianed_model)
+        self.load_state_dict(state_dict['model'])
+        # self.

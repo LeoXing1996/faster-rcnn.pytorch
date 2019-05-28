@@ -41,6 +41,7 @@ class _fasterRCNN(nn.Module):
 
         self.RCNN_roi_pool = ROIPool((cfg.POOLING_SIZE, cfg.POOLING_SIZE), 1.0 / 16.0)
         self.RCNN_roi_align = ROIAlign((cfg.POOLING_SIZE, cfg.POOLING_SIZE), 1.0 / 16.0, 0)
+        self.global_loss = 0
 
     def forward(self, im_data, im_info, gt_boxes, num_boxes):
         batch_size = im_data.size(0)
@@ -134,5 +135,5 @@ class _fasterRCNN(nn.Module):
         self._init_weights()
 
     def load_ckpt(self, ckpt):
-        self.load_state_dict(ckpt)
+        self.load_state_dict(ckpt['model'])
         pass

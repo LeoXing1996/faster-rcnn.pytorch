@@ -47,18 +47,23 @@ class _fasterRCNN_rel_cls(nn.Module):
         self.RCNN_rpn = _RPN(self.dout_base_model)
         self.RCNN_proposal_target = _ProposalTargetLayer(self.n_classes)
 
-        # self.RCNN_roi_pool = _RoIPooling(cfg.POOLING_SIZE, cfg.POOLING_SIZE, 1.0/16.0)
-        # self.RCNN_roi_align = RoIAlignAvg(cfg.POOLING_SIZE, cfg.POOLING_SIZE, 1.0/16.0)
-
         self.RCNN_roi_pool = ROIPool((cfg.POOLING_SIZE, cfg.POOLING_SIZE), 1.0 / 16.0)
         self.RCNN_roi_align = ROIAlign((cfg.POOLING_SIZE, cfg.POOLING_SIZE), 1.0 / 16.0, 0)
 
         self.skip_layers = ['RCNN_cls_score.weight', 'RCNN_cls_score.bias',
                             'RCNN_bbox_pred.weight', 'RCNN_bbox_pred.bias']
 
+        # self.rel_cls_score = nn.Linear(2048, self.n_classes)
+        # if self.class_agnostic:
+        #     self.rel_bbox_pred = nn.Linear(2048, 4)
+        # else:
+        #     self.rel_bbox_pred = nn.Linear(2048, 4 * self.n_classes)
+
         self.cls_feat_layer = nn.Linear(2 * self.n_classes, 1).cuda()
         self.area_feat_layer = nn.Linear(2 * self.n_classes, 1).cuda()
         self.rel_weight_layer = nn.Linear(3, 1).cuda()
+        self.rel_merge = nn.Conv2d(2048, 1024, 1)
+        self.global_loss = torch.tensor([10.], requires_grad=False).cuda()
 
     def forward(self, im_data, im_info, gt_boxes, num_boxes, times=1):
         batch_size = im_data.size(0)
@@ -113,10 +118,15 @@ class _fasterRCNN_rel_cls(nn.Module):
             avg_pooled_feat = self._head_to_tail(pooled_feat)
             cls_score = self.RCNN_cls_score(avg_pooled_feat)
             bbox_pred = self.RCNN_bbox_pred(avg_pooled_feat)
+
+            # cls_score = self.rel_cls_score(avg_pooled_feat) -->
+            # bbox_pred = self.rel_bbox_pred(avg_pooled_feat) -->
+
+            # no loss accumulate -->
             RCNN_loss_bbox_tmp, RCNN_loss_cls_tmp = self.add_loss(bbox_pred, cls_score, rois_label,
                                                                   rois_target, rois_inside_ws, rois_outside_ws)
-            RCNN_loss_bbox_mean = RCNN_loss_bbox_mean + RCNN_loss_bbox_tmp.data
-            RCNN_loss_cls_mean = RCNN_loss_cls_mean + RCNN_loss_bbox_tmp.data
+            RCNN_loss_bbox_mean = RCNN_loss_bbox_mean + RCNN_loss_bbox_tmp
+            RCNN_loss_cls_mean = RCNN_loss_cls_mean + RCNN_loss_bbox_tmp
 
             # 2. get cls info
             cls_prob = torch.softmax(cls_score, dim=1)
@@ -134,15 +144,27 @@ class _fasterRCNN_rel_cls(nn.Module):
 
         # 5. calculate the final loss
         avg_pooled_feat = self._head_to_tail(pooled_feat)
+
         cls_score = self.RCNN_cls_score(avg_pooled_feat)
+        cls_prob = torch.softmax(cls_score, dim=1)
         bbox_pred = self.RCNN_bbox_pred(avg_pooled_feat)
+
         RCNN_loss_bbox_tmp, RCNN_loss_cls_tmp = self.add_loss(bbox_pred, cls_score, rois_label,
                                                               rois_target, rois_inside_ws, rois_outside_ws)
-        RCNN_loss_cls_mean = RCNN_loss_cls_tmp.data + RCNN_loss_cls_mean
-        RCNN_loss_bbox_mean = RCNN_loss_bbox_tmp.data + RCNN_loss_cls_mean
+
+        RCNN_loss_cls_mean = RCNN_loss_cls_tmp + RCNN_loss_cls_mean
+        RCNN_loss_bbox_mean = RCNN_loss_bbox_tmp + RCNN_loss_bbox_mean
+
+        # no loss accumulate
+        # RCNN_loss_cls = RCNN_loss_cls_mean
+        # RCNN_loss_bbox = RCNN_loss_bbox_mean
 
         RCNN_loss_cls = RCNN_loss_cls_mean / (times+1)
         RCNN_loss_bbox = RCNN_loss_bbox_mean / (times+1)
+        if self.training:
+            self.global_loss = (RCNN_loss_cls + RCNN_loss_bbox).detach()
+        else:
+            self.global_loss = 0
         cls_prob = cls_prob.view(batch_size, rois.size(1), -1)
         bbox_pred = bbox_pred.view(batch_size, rois.size(1), -1)
 
@@ -184,6 +206,11 @@ class _fasterRCNN_rel_cls(nn.Module):
         normal_init(self.RCNN_rpn.RPN_bbox_pred, 0, 0.01, cfg.TRAIN.TRUNCATED)
         normal_init(self.RCNN_cls_score, 0, 0.01, cfg.TRAIN.TRUNCATED)
         normal_init(self.RCNN_bbox_pred, 0, 0.001, cfg.TRAIN.TRUNCATED)
+        # normal_init(self.rel_bbox_pred, 0, 0.001, cfg.TRAIN.TRUNCATED)
+        # normal_init(self.rel_cls_score, 0, 0.001, cfg.TRAIN.TRUNCATED)
+        normal_init(self.rel_weight_layer, 0, 0.01, cfg.TRAIN.TRUNCATED)
+        normal_init(self.cls_feat_layer, 0, 0.01, cfg.TRAIN.TRUNCATED)
+        normal_init(self.area_feat_layer, 0, 0.01, cfg.TRAIN.TRUNCATED)
 
     def create_architecture(self):
         self._init_modules()
@@ -317,6 +344,17 @@ class _fasterRCNN_rel_cls(nn.Module):
             # pooled_feat[b] = rel_feats + pooled_feat[b]
         rel_feats_batch = torch.cat(rel_feats_batch, dim=0)
         # return pooled_feat + rel_feats_batch
-        pooled_feat = 0.5 * pooled_feat + rel_feats_batch
-        # return 0.5 * pooled_feat + rel_feats_batch  # add normalization
+        # pooled_feat = 0.5 * pooled_feat + 0.5 * rel_feats_batch
+        pooled_feat = pooled_feat + 0.5 * torch.relu(1-self.global_loss) * rel_feats_batch
         return pooled_feat
+
+    def rel_layer_loss(self, bbox_pred, cls_score):
+        # this function use L2 loss to regularize cls_score and bbox_pred in rel block are similar to
+        # result given by cls and reg layer
+
+        pass
+
+    def load_ckpt(self, ckpt):
+        # state_dict = torch.load(ckpt)
+        self.global_loss = ckpt['global_loss']
+        self.load_state_dict(ckpt['model'])

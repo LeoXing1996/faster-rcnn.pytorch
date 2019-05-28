@@ -181,6 +181,27 @@ if __name__ == '__main__':
         args.imdb_name = "vg_150-50-50_minitrain"
         args.imdbval_name = "vg_150-50-50_minival"
         args.set_cfgs = ['ANCHOR_SCALES', '[4, 8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '50']
+    elif args.dataset == 'monitor_ori':
+        args.imdb_name = "monitor_Ori_trainval"
+        args.imdbval_name = "monitor_ori_test"
+        args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '20']
+        args.disp_interval = 10
+    elif args.dataset == 'monitor_pre_1':
+        args.imdb_name = "monitor_Ori_trainval+monitor_Pre1_trainval"
+        args.imdbval_name = "monitor_ori_test"
+        args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '20']
+        args.disp_interval = 10
+    elif args.dataset == 'monitor_pre_2':
+        args.imdb_name = "monitor_Ori_trainval+monitor_Pre2_trainval"
+        args.imdbval_name = "monitor_ori_test"
+        args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '20']
+        args.disp_interval = 10
+    elif args.dataset == 'monitor_pre':
+        args.imdb_name = "monitor_Ori_trainval+monitor_Pre1_trainval+monitor_Pre2_trainval"
+        args.imdbval_name = "monitor_ori_test"
+        args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '20']
+        args.disp_interval = 10
+
 
     args.cfg_file = "cfgs/{}_ls.yml".format(args.net) if args.large_scale else "cfgs/{}.yml".format(args.net)
 
@@ -282,9 +303,9 @@ if __name__ == '__main__':
         optimizer = torch.optim.SGD(params, momentum=cfg.TRAIN.MOMENTUM)
 
     if args.resume:
-        load_name = './data/benchmark/res101/pascal_voc/faster_rcnn_1_7_10021.pth'
-        # load_name = os.path.join(output_dir,
-        #                          'faster_rcnn_{}_{}_{}.pth'.format(args.checksession, args.checkepoch, args.checkpoint))
+        # load_name = './data/benchmark/res101/pascal_voc/faster_rcnn_1_7_10021.pth'
+        load_name = os.path.join(output_dir,
+                                 'faster_rcnn_{}_{}_{}.pth'.format(args.checksession, args.checkepoch, args.checkpoint))
         print("loading checkpoint %s" % (load_name))
         checkpoint = torch.load(load_name)
         args.session = checkpoint['session']
@@ -388,6 +409,7 @@ if __name__ == '__main__':
         save_checkpoint({
             'session': args.session,
             'epoch': epoch + 1,
+            'global_loss': fasterRCNN.global_loss,
             'model': fasterRCNN.module.state_dict() if args.mGPUs else fasterRCNN.state_dict(),
             'optimizer': optimizer.state_dict(),
             'pooling_mode': cfg.POOLING_MODE,
