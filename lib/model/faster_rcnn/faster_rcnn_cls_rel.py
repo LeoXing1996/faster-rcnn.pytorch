@@ -163,8 +163,6 @@ class _fasterRCNN_rel_cls(nn.Module):
         RCNN_loss_bbox = RCNN_loss_bbox_mean / (times+1)
         if self.training:
             self.global_loss = (RCNN_loss_cls + RCNN_loss_bbox).detach()
-        else:
-            self.global_loss = 0
         cls_prob = cls_prob.view(batch_size, rois.size(1), -1)
         bbox_pred = bbox_pred.view(batch_size, rois.size(1), -1)
 

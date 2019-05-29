@@ -210,3 +210,5 @@ logs/
 outputs/
 models/
 *.ipynb
+*.bash
+*.sh

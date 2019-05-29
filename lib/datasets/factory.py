@@ -26,10 +26,10 @@ for year in ['2007', '2012']:
         __sets[name] = (lambda split=split, year=year: pascal_voc(split, year))
 
 for split in ['train', 'val', 'trainval', 'test']:
-    # for kind in ['Ori', 'Pre1', 'Pre2']:
-    for kind in ['Ori']:
+    for kind in ['Ori', 'OriSmall', 'Pre1', 'Pre2']:
         name = 'monitor_{}_{}'.format(kind, split)
-        __sets[name] = (lambda split=split: monitor(split, kind))
+        __sets[name] = (lambda split=split, kind=kind: monitor(split, kind))
+        # print(split, kind)
 
 # Set up coco_2014_<split>
 for year in ['2014']:

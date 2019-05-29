@@ -21,13 +21,15 @@ def parse_rec(filename):
         obj_struct = {}
         obj_struct['name'] = obj.find('name').text
         obj_struct['pose'] = obj.find('pose').text
-        obj_struct['truncated'] = int(obj.find('truncated').text)
-        obj_struct['difficult'] = int(obj.find('difficult').text)
+        truc = obj.find('truncated')
+        obj_struct['truncated'] = 0 if truc is None or truc.text is None else int(truc.text)
+        diffc = obj.find('difficult')
+        obj_struct['difficult'] = 0 if diffc is None or diffc.text is None else int(diffc.text)
         bbox = obj.find('bndbox')
-        obj_struct['bbox'] = [int(bbox.find('xmin').text),
-                              int(bbox.find('ymin').text),
-                              int(bbox.find('xmax').text),
-                              int(bbox.find('ymax').text)]
+        obj_struct['bbox'] = [int(float(bbox.find('xmin').text)),
+                              int(float(bbox.find('ymin').text)),
+                              int(float(bbox.find('xmax').text)),
+                              int(float(bbox.find('ymax').text))]
         objects.append(obj_struct)
 
     return objects
