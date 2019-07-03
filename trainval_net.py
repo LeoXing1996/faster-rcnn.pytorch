@@ -188,7 +188,7 @@ if __name__ == '__main__':
         args.disp_interval = 10
     elif args.dataset == 'monitor_pre_1':
         args.imdb_name = "monitor_Pre1_trainval"
-        args.imdbval_name = "monitor_OriSmall_test"
+        args.imdbval_name = "monitor_Pre1_test"
         args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '20']
         args.disp_interval = 10
     elif args.dataset == 'monitor_pre_2':
@@ -268,7 +268,13 @@ if __name__ == '__main__':
     elif args.net == 'res101':
         if args.use_rel:
             # fasterRCNN = resnet_rel(imdb.classes, 101, pretrained=True, class_agnostic=args.class_agnostic)
-            fasterRCNN = resnet_rel_cls(imdb.classes, 101, pretrained=True, class_agnostic=args.class_agnostic)
+            if args.mGPUs:
+                GPUs = 2
+                fasterRCNN = resnet_rel_cls(imdb.classes, 101, pretrained=True,
+                                            class_agnostic=args.class_agnostic, GPUs=GPUs)
+                pass
+            else:
+                fasterRCNN = resnet_rel_cls(imdb.classes, 101, pretrained=True, class_agnostic=args.class_agnostic)
         else:
             fasterRCNN = resnet(imdb.classes, 101, pretrained=True, class_agnostic=args.class_agnostic)
     elif args.net == 'res50':
@@ -335,6 +341,7 @@ if __name__ == '__main__':
         # setting to train mode
         fasterRCNN.train()
         loss_temp = 0
+        loss_epoch = 0
         start = time.time()
 
         if epoch % (args.lr_decay_step + 1) == 0:
@@ -357,6 +364,7 @@ if __name__ == '__main__':
 
             loss = rpn_loss_cls.mean() + rpn_loss_box.mean() + RCNN_loss_cls.mean() + RCNN_loss_bbox.mean()
             loss_temp += loss.item()
+            loss_epoch += loss.item()
 
             # backward
             optimizer.zero_grad()
@@ -409,7 +417,7 @@ if __name__ == '__main__':
         save_checkpoint({
             'session': args.session,
             'epoch': epoch + 1,
-            'global_loss': fasterRCNN.global_loss,
+            'global_loss': loss_epoch / iters_per_epoch,
             'model': fasterRCNN.module.state_dict() if args.mGPUs else fasterRCNN.state_dict(),
             'optimizer': optimizer.state_dict(),
             'pooling_mode': cfg.POOLING_MODE,

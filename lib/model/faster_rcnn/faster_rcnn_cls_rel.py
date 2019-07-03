@@ -26,12 +26,12 @@ from model.utils.net_utils import _smooth_l1_loss, _crop_pool_layer, _affine_gri
 class _fasterRCNN_rel_cls(nn.Module):
     """ faster RCNN """
 
-    def __init__(self, classes, class_agnostic):
+    def __init__(self, classes, class_agnostic, GPUs=1):
         super(_fasterRCNN_rel_cls, self).__init__()
         self.classes = classes
         self.n_classes = len(classes)
         self.class_agnostic = class_agnostic
-        self.bz = cfg.TRAIN.IMS_PER_BATCH
+        self.bz = int(cfg.TRAIN.IMS_PER_BATCH / GPUs)
         if self.training:
             self.img_bz = cfg.TRAIN.BATCH_SIZE
         else:
@@ -66,6 +66,10 @@ class _fasterRCNN_rel_cls(nn.Module):
         self.global_loss = torch.tensor([10.], requires_grad=False).cuda()
 
     def forward(self, im_data, im_info, gt_boxes, num_boxes, times=1):
+        if self.training:
+            self.img_bz = cfg.TRAIN.BATCH_SIZE
+        else:
+            self.img_bz = cfg.TEST.RPN_POST_NMS_TOP_N
         batch_size = im_data.size(0)
 
         im_info = im_info.data
@@ -315,7 +319,6 @@ class _fasterRCNN_rel_cls(nn.Module):
             dist_info_sin = dist_info[i].view(6, 1)
 
             rel_weight = self.get_rel_weight(cls_info_sin, area_info_sin, dist_info_sin)
-            # rel_feat = pooled_feat[id_info[i]] * torch.softmax(rel_weight / 100, 0).view(6, 1, 1, 1)
             rel_feat = pooled_feat[id_info[i]] * torch.softmax(rel_weight, 0).view(6, 1, 1, 1)
             rel_feat = rel_feat.sum(dim=0, keepdim=True)
             # rel_feats[i] = rel_feat
@@ -339,11 +342,10 @@ class _fasterRCNN_rel_cls(nn.Module):
             id_info_bz = id_info[b]
             rel_feats = self.get_rel_feat(cls_info_bz, area_info_bz, dist_info_bz, id_info_bz, pooled_feat[b])
             rel_feats_batch.append(rel_feats.unsqueeze(0))
-            # pooled_feat[b] = rel_feats + pooled_feat[b]
         rel_feats_batch = torch.cat(rel_feats_batch, dim=0)
         # return pooled_feat + rel_feats_batch
-        # pooled_feat = 0.5 * pooled_feat + 0.5 * rel_feats_batch
-        pooled_feat = pooled_feat + 0.5 * torch.relu(1-self.global_loss) * rel_feats_batch
+        pooled_feat = 0.5 * pooled_feat + 0.5 * rel_feats_batch
+        # pooled_feat = pooled_feat + 0.5 * torch.relu(1-self.global_loss) * rel_feats_batch
         return pooled_feat
 
     def rel_layer_loss(self, bbox_pred, cls_score):
@@ -354,5 +356,5 @@ class _fasterRCNN_rel_cls(nn.Module):
 
     def load_ckpt(self, ckpt):
         # state_dict = torch.load(ckpt)
-        self.global_loss = ckpt['global_loss']
+        self.global_loss = torch.tensor(ckpt['global_loss'])
         self.load_state_dict(ckpt['model'])

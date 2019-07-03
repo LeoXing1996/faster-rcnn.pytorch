@@ -38,6 +38,7 @@ from model.utils.net_utils import save_net, load_net, vis_detections, save_detec
 from model.utils.blob import im_list_to_blob
 from model.faster_rcnn.vgg16 import vgg16
 from model.faster_rcnn.resnet import resnet
+from model.faster_rcnn.resnet import resnet_rel_cls
 import pdb
 
 xrange = range  # Python 3
@@ -62,14 +63,16 @@ def parse_args():
                         nargs=argparse.REMAINDER)
     parser.add_argument('--load_dir', dest='load_dir',
                         help='directory to load models',
-                        default="./data/branchmark")
+                        default="./data/benchmark")
     parser.add_argument('--image_dir', dest='image_dir',
                         help='directory to load images for demo',
-                        default="./data/monitor")
+                        default="/home/xingzn/Code/faster-rcnn.pytorch/data/monitorDevkitOri/monitor/JPEGImages")
     parser.add_argument('--output_dir', default='./output',
                         help='directory to save the output images')
     parser.add_argument('--cuda', dest='cuda',
                         help='whether use CUDA',
+                        action='store_true')
+    parser.add_argument('--use_rel',
                         action='store_true')
     parser.add_argument('--mGPUs', dest='mGPUs',
                         help='whether use multiple GPUs',
@@ -189,13 +192,19 @@ if __name__ == '__main__':
                                'potted plant', 'bed', 'dining table', 'toilet', 'tv', 'laptop', 'mouse', 'remote',
                                'keyboard', 'cell phone', 'microwave', 'oven', 'toaster', 'sink', 'refrigerator',
                                'book', 'clock', 'vase', 'scissors', 'teddy bear', 'hair drier', 'toothbrush']))
-        useful_classes = [1, 25, 26]
+        useful_classes = [1, 3, 25, 26]
         # useful_classes = [i+1 for i in range(len(classes)-1)]
         args.set_cfgs = ['ANCHOR_SCALES', '[4, 8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]']
         cfg_from_list(args.set_cfgs)
 
-    else:
-        exit(0)
+    elif args.dataset == 'monitor_ori':
+        classes = np.asarray(['__background__', 'car', 'person', 'umbrella', 'bag'])
+        useful_classes = [1, 2, 3, 4]
+    elif args.dataset == 'monitor_pre_1' or args.dataset == 'monitor_pre_2':
+        classes = np.asarray(['__background__', 'car', 'person'])
+        useful_classes = [1, 2]
+        # arg
+        # exit(0)
 
     cmap = plt.get_cmap('tab20b')
     color_rgba = [cmap(i) for i in np.linspace(0, 1, np.minimum(20, len(useful_classes)))]
@@ -209,7 +218,11 @@ if __name__ == '__main__':
     if args.net == 'vgg16':
         fasterRCNN = vgg16(classes, pretrained=False, class_agnostic=args.class_agnostic)
     elif args.net == 'res101':
-        fasterRCNN = resnet(classes, 101, pretrained=False, class_agnostic=args.class_agnostic)
+        if args.use_rel:
+            fasterRCNN = resnet_rel_cls(classes, 101, pretrained=True, class_agnostic=args.class_agnostic)
+            cfg.TEST.RPN_POST_NMS_TOP_N = 300
+        else:
+            fasterRCNN = resnet(classes, 101, pretrained=False, class_agnostic=args.class_agnostic)
     elif args.net == 'res50':
         fasterRCNN = resnet(classes, 50, pretrained=False, class_agnostic=args.class_agnostic)
     elif args.net == 'res152':
@@ -225,7 +238,7 @@ if __name__ == '__main__':
         checkpoint = torch.load(load_name)
     else:
         checkpoint = torch.load(load_name, map_location=(lambda storage, loc: storage))
-    fasterRCNN.load_state_dict(checkpoint['model'])
+    fasterRCNN.load_ckpt(checkpoint)
     if 'pooling_mode' in checkpoint.keys():
         cfg.POOLING_MODE = checkpoint['pooling_mode']
 

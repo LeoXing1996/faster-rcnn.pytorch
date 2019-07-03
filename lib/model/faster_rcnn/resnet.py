@@ -292,13 +292,13 @@ class resnet(_fasterRCNN):
 
 
 class resnet_rel_cls(_fasterRCNN_rel_cls):
-    def __init__(self, classes, num_layers=101, pretrained=False, class_agnostic=False):
+    def __init__(self, classes, num_layers=101, pretrained=False, class_agnostic=False, GPUs=1):
         self.model_path = 'data/pretrained_model/resnet101_caffe.pth'
         self.dout_base_model = 1024
         self.pretrained = pretrained
         self.class_agnostic = class_agnostic
 
-        _fasterRCNN_rel_cls.__init__(self, classes, class_agnostic)
+        _fasterRCNN_rel_cls.__init__(self, classes, class_agnostic, GPUs)
 
     def _init_modules(self):
         resnet = resnet101()

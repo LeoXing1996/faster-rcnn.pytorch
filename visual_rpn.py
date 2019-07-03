@@ -44,7 +44,7 @@ imdb, roidb, ratio_list, ratio_index = combined_roidb(imdbval_name, False)
 # 2. initialize faster-rcnn --> load faster-rcnn trained with coco
 
 set_cfgs = ['ANCHOR_SCALES', '[4, 8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]']
-cfg_file = "../cfgs/res101.yml"
+cfg_file = "./cfgs/res101.yml"
 cfg_from_file(cfg_file)
 cfg_from_list(set_cfgs)
 net_classes = np.asarray((['__background__', 'person', 'bicycle',
@@ -60,7 +60,7 @@ net_classes = np.asarray((['__background__', 'person', 'bicycle',
                            'book', 'clock', 'vase', 'scissors', 'teddy bear', 'hair drier', 'toothbrush']))
 fasterRCNN = resnet(net_classes, 101, pretrained=False, class_agnostic=False)
 fasterRCNN.create_architecture()
-ckpt = torch.load('../data/benchmark/res101/coco/faster_rcnn_1_10_14657.pth')
+ckpt = torch.load('./data/benchmark/res101/coco/faster_rcnn_1_10_14657.pth')
 fasterRCNN.load_state_dict(ckpt['model'])
 
 cfg.POOLING_MODE = 'align'
@@ -91,7 +91,7 @@ def visual_anchors(img_path, ctr_coor=None, base_size=16, ratios=[0.5, 1, 2],
 
     draw = ImageDraw.Draw(img)
     for anchor in anchors:
-        draw.rectangle(anchor)
+        draw.rectangle(list(anchor / 16))
 
     if show:
         img.show()
@@ -99,8 +99,8 @@ def visual_anchors(img_path, ctr_coor=None, base_size=16, ratios=[0.5, 1, 2],
     if not os.path.isdir(save_dir):
         os.makedirs(save_dir)
     if save_name is None:
-        save_name = img_path.split('/')[-1][-1] + 'anchor.jpg'
-    img.savefig(os.path.join(save_dir, save_name))
+        save_name = img_path.split('/')[-1][:-3] + 'anchor.jpg'
+    img.save(os.path.join(save_dir, save_name))
 
 
 def visual_anchors_ind():
@@ -373,3 +373,7 @@ class visualization_offical_dataset(object):
         proposals_nms = proposals_nms[0][:, 1:].detach().cpu()
 
         return proposals, proposals_clip, proposals_nms
+
+
+if __name__ == '__main__':
+    visual_anchors('images/img3.jpg', [100, 100])
